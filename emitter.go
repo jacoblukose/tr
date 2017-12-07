@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"time"
+	
 )
 
 // Start initialize loop for sending data from inputs to outputs
@@ -50,6 +51,7 @@ func CopyMulty(src io.Reader, writers ...io.Writer) (err error) {
 	buf := make([]byte, 5*1024*1024)
 	wIndex := 0
 	modifier := NewHTTPModifier(&Settings.modifierConfig)
+	// fmt.Printf("%s\n", modifier)
 	filteredRequests := make(map[string]time.Time)
 	filteredRequestsLastCleanTime := time.Now()
 
@@ -81,11 +83,13 @@ func CopyMulty(src io.Reader, writers ...io.Writer) (err error) {
 
 					// If modifier tells to skip request
 					if len(body) == 0 {
+						// fmt.Println("req skipped")
 						filteredRequests[requestID] = time.Now()
 						continue
 					}
 
 					if originalBodyLen != len(body) {
+						// fmt.Println("modified")
 						payload = append(payload[:headSize], body...)
 					}
 
@@ -93,6 +97,7 @@ func CopyMulty(src io.Reader, writers ...io.Writer) (err error) {
 						Debug("[EMITTER] Rewritten input:", len(payload), "First 500 bytes:", string(payload[0:_maxN]))
 					}
 				} else {
+					// fmt.Println("inside delete")
 					if _, ok := filteredRequests[requestID]; ok {
 						delete(filteredRequests, requestID)
 						continue

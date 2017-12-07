@@ -4,8 +4,11 @@ import (
 	"io"
 	"sync/atomic"
 	"time"
-
+	"fmt"
 	"github.com/buger/goreplay/proto"
+	"encoding/csv"
+	"os"
+	"strconv"
 )
 
 const initialDynamicWorkers = 10
@@ -47,6 +50,7 @@ type HTTPOutput struct {
 	address string
 	limit   int
 	queue   chan []byte
+	output_queue chan []string
 
 	responses chan response
 
@@ -74,6 +78,7 @@ func NewHTTPOutput(address string, config *HTTPOutputConfig) io.Writer {
 	o.queue = make(chan []byte, 1000)
 	o.responses = make(chan response, 1000)
 	o.needWorker = make(chan int, 1)
+	o.output_queue = make(chan []string,1000)
 
 	// Initial workers count
 	if o.config.workers == 0 {
@@ -93,6 +98,7 @@ func NewHTTPOutput(address string, config *HTTPOutputConfig) io.Writer {
 }
 
 func (o *HTTPOutput) workerMaster() {
+	go o.writeWorker()
 	for {
 		newWorkers := <-o.needWorker
 		for i := 0; i < newWorkers; i++ {
@@ -106,6 +112,24 @@ func (o *HTTPOutput) workerMaster() {
 	}
 }
 
+func (o *HTTPOutput) writeWorker() {
+	fmt.Println("inside writeWorker")
+	file, _ := os.Create("result.csv")
+    defer file.Close()
+	writer := csv.NewWriter(file)
+    defer writer.Flush()
+    writer.Comma = '\t'
+
+    for {
+		data := <-o.output_queue
+		fmt.Println(data)
+		// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
+		writer.Write(data) 
+
+	}
+    }
+
+
 func (o *HTTPOutput) startWorker() {
 	client := NewHTTPClient(o.address, &HTTPClientConfig{
 		FollowRedirects:    o.config.redirectLimit,
@@ -118,11 +142,13 @@ func (o *HTTPOutput) startWorker() {
 	deathCount := 0
 
 	atomic.AddInt64(&o.activeWorkers, 1)
-
+    c := 0
 	for {
+		
+		c = c + 1
 		select {
 		case data := <-o.queue:
-			o.sendRequest(client, data)
+			o.sendRequest(client, data , c)
 			deathCount = 0
 		case <-time.After(time.Millisecond * 100):
 			// When dynamic scaling enabled workers die after 2s of inactivity
@@ -143,6 +169,7 @@ func (o *HTTPOutput) startWorker() {
 			}
 		}
 	}
+	fmt.Println("after for")
 }
 
 func (o *HTTPOutput) Write(data []byte) (n int, err error) {
@@ -184,9 +211,10 @@ func (o *HTTPOutput) Read(data []byte) (int, error) {
 	return len(resp.payload) + len(header), nil
 }
 
-func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
-	meta := payloadMeta(request)
 
+
+func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte, c int) {
+	meta := payloadMeta(request)
 	if Settings.debug {
 		Debug(meta)
 	}
@@ -204,7 +232,12 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	start := time.Now()
 	resp, err := client.Send(body)
 	stop := time.Now()
-
+	delta := stop.Sub(start)
+	duration := strconv.FormatInt(int64(delta), 16)
+	start_time := strconv.FormatInt(start.UnixNano(),16)
+	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
+	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
+	o.output_queue <- []string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time}
 	if err != nil {
 		Debug("Request error:", err)
 	}

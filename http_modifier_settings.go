@@ -41,6 +41,7 @@ func (h *HTTPHeaderFilters) String() string {
 }
 
 func (h *HTTPHeaderFilters) Set(value string) error {
+	
 	valArr := strings.SplitN(value, ":", 2)
 	if len(valArr) < 2 {
 		return errors.New("need both header and value, colon-delimited (ex. user_id:^169$).")
@@ -52,7 +53,6 @@ func (h *HTTPHeaderFilters) Set(value string) error {
 	}
 
 	*h = append(*h, headerFilter{name: []byte(valArr[0]), regexp: r})
-
 	return nil
 }
 

@@ -18,7 +18,6 @@ package proto
 
 import (
 	"bytes"
-
 	"github.com/buger/goreplay/byteutils"
 )
 
@@ -65,7 +64,10 @@ func toLower(b byte) byte {
 }
 
 func headerIndex(payload []byte, name []byte) int {
+
+	// fmt.Printf("payload : %s \nname %s",payload,name)
 	isLower := isLower(name[0])
+	// fmt.Printf("%v",isLower)
 	i := 0
 
 	for {
@@ -78,9 +80,11 @@ func headerIndex(payload []byte, name []byte) int {
 
 			// We are at the end
 			if i == len(payload) {
-				return -1
+				// fmt.Println("no request header found")
+				return -2
 			}
-
+			
+			// fmt.Printf("payload[i] :%s,name[0]: %s,islower: %v,tolower(name[0]): %v,toupper(name[0]): %v",string(payload[i]),string(name[0]),isLower,toLower(name[0]),toUpper(name[0]))
 			if payload[i] == name[0] ||
 				(!isLower && payload[i] == toLower(name[0])) ||
 				(isLower && payload[i] == toUpper(name[0])) {
@@ -88,16 +92,21 @@ func headerIndex(payload []byte, name []byte) int {
 				i++
 				j := 1
 				for {
+					// fmt.Printf("Value of i : %d \n", i)
+					// fmt.Println(j, len(name))
 					if j == len(name) {
 						// Matched, and return start of the header
+						// fmt.Println(i, len(name), i - len(name))
 						return i - len(name)
-					}
 
+					}
+					// fmt.Println(string(payload[i]), string(name[j]))	
 					if payload[i] != name[j] {
+
 						break
 					}
 
-					// If compound header name do one more case check: Content-Length or Transfer-Encoding
+					//If compound header name do one more case check: Content-Length or Transfer-Encoding
 					if name[j] == '-' {
 						i++
 						j++
@@ -129,11 +138,17 @@ func header(payload []byte, name []byte) (value []byte, headerStart, headerEnd, 
 
 	if headerStart == -1 {
 		return
+	} else if headerStart == -2 {
+
+		return []byte("invalid"),0,0,0,0
 	}
 
+
+	// fmt.Printf("\n headerStart %d \n", headerStart)
 	valueStart = headerStart + len(name) + 1 // Skip ":" after header name
 	headerEnd = valueStart + bytes.IndexByte(payload[valueStart:], '\n')
 
+	// fmt.Printf("valueStart %v headerEnd %v", valueStart, headerEnd)
 	for valueStart < headerEnd { // Ignore empty space after ':'
 		if payload[valueStart] == ' ' {
 			valueStart++
@@ -143,7 +158,6 @@ func header(payload []byte, name []byte) (value []byte, headerStart, headerEnd, 
 	}
 
 	valueEnd = valueStart + bytes.IndexByte(payload[valueStart:], '\n')
-
 	if payload[headerEnd-1] == '\r' {
 		valueEnd--
 	}
@@ -157,6 +171,8 @@ func header(payload []byte, name []byte) (value []byte, headerStart, headerEnd, 
 		}
 	}
 	value = payload[valueStart:valueEnd]
+
+	// fmt.Println( "\n value: ", string(value), "\n") 
 
 	return
 }

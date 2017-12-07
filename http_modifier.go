@@ -5,7 +5,6 @@ import (
 	"strings"
 	"hash/fnv"
 	"encoding/base64"
-
 	"github.com/buger/goreplay/proto"
 )
 
@@ -29,7 +28,6 @@ func NewHTTPModifier(config *HTTPModifierConfig) *HTTPModifier {
 		len(config.methods) == 0 {
 		return nil
 	}
-
 	return &HTTPModifier{config: config}
 }
 
@@ -97,8 +95,11 @@ func (m *HTTPModifier) Rewrite(payload []byte) (response []byte) {
 	if len(m.config.headerFilters) > 0 {
 		for _, f := range m.config.headerFilters {
 			value := proto.Header(payload, f.name)
+			// fmt.Printf("payload : %s \nf.name %s",payload,f.name)
 
+			// fmt.Println("rohanmon. . . . \n ",string(value))
 			if len(value) > 0 && !f.regexp.Match(value) {
+				// fmt.Println("inside if")
 				return
 			}
 		}
@@ -107,7 +108,7 @@ func (m *HTTPModifier) Rewrite(payload []byte) (response []byte) {
 	if len(m.config.headerNegativeFilters) > 0 {
 		for _, f := range m.config.headerNegativeFilters {
 			value := proto.Header(payload, f.name)
-
+			// fmt.Println(f)
 			if len(value) > 0 && f.regexp.Match(value) {
 				return
 			}

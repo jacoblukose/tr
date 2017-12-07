@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	_"fmt"
 	"time"
 
 	"github.com/buger/goreplay/proto"
