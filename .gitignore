@@ -24,3 +24,5 @@ gor
 corpus
 crashers
 suppressions
+goreplay
+*.tsv

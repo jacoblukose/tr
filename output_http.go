@@ -51,6 +51,8 @@ type HTTPOutput struct {
 	limit   int
 	queue   chan []byte
 	output_queue chan []string
+	status chan bool
+
 
 	responses chan response
 
@@ -78,7 +80,8 @@ func NewHTTPOutput(address string, config *HTTPOutputConfig) io.Writer {
 	o.queue = make(chan []byte, 1000)
 	o.responses = make(chan response, 1000)
 	o.needWorker = make(chan int, 1)
-	o.output_queue = make(chan []string,1000)
+	o.output_queue = make(chan []string,2)
+	o.status = make(chan bool)
 
 	// Initial workers count
 	if o.config.workers == 0 {
@@ -114,17 +117,18 @@ func (o *HTTPOutput) workerMaster() {
 
 func (o *HTTPOutput) writeWorker() {
 	fmt.Println("inside writeWorker")
-	file, _ := os.Create("result.csv")
+	file, _ := os.Create("result.tsv")
     defer file.Close()
 	writer := csv.NewWriter(file)
     defer writer.Flush()
     writer.Comma = '\t'
-
+    writer.Write([]string{"STATUS","START_TIME", "DURATION" }) 
     for {
-		data := <-o.output_queue
-		fmt.Println(data)
-		// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
-		writer.Write(data) 
+		data, _ := <-o.output_queue
+		writer.Write(data)
+		// writer.Write([]string{"hihi"}) 
+		writer.Flush()
+		
 
 	}
     }
@@ -142,13 +146,12 @@ func (o *HTTPOutput) startWorker() {
 	deathCount := 0
 
 	atomic.AddInt64(&o.activeWorkers, 1)
-    c := 0
+
 	for {
-		
-		c = c + 1
+	
 		select {
 		case data := <-o.queue:
-			o.sendRequest(client, data , c)
+			o.sendRequest(client, data)
 			deathCount = 0
 		case <-time.After(time.Millisecond * 100):
 			// When dynamic scaling enabled workers die after 2s of inactivity
@@ -169,7 +172,6 @@ func (o *HTTPOutput) startWorker() {
 			}
 		}
 	}
-	fmt.Println("after for")
 }
 
 func (o *HTTPOutput) Write(data []byte) (n int, err error) {
@@ -213,7 +215,7 @@ func (o *HTTPOutput) Read(data []byte) (int, error) {
 
 
 
-func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte, c int) {
+func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	meta := payloadMeta(request)
 	if Settings.debug {
 		Debug(meta)
@@ -233,11 +235,12 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte, c int) {
 	resp, err := client.Send(body)
 	stop := time.Now()
 	delta := stop.Sub(start)
-	duration := strconv.FormatInt(int64(delta), 16)
-	start_time := strconv.FormatInt(start.UnixNano(),16)
+	duration := strconv.FormatInt(int64(delta), 10)
+	start_time := strconv.FormatInt(start.UnixNano(), 10)
+	// fmt.Printf("%v %v %v \n",string(resp[9:13]),duration,start_time)
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
-	o.output_queue <- []string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time}
+	o.output_queue <- []string{ string(resp[9:13]), start_time, duration }
 	if err != nil {
 		Debug("Request error:", err)
 	}
