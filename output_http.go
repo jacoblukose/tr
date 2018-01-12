@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync/atomic"
 	"time"
-	"fmt"
+	_"fmt"
 	"github.com/buger/goreplay/proto"
 	"encoding/csv"
 	"os"
@@ -116,13 +116,13 @@ func (o *HTTPOutput) workerMaster() {
 }
 
 func (o *HTTPOutput) writeWorker() {
-	fmt.Println("inside writeWorker")
+	// fmt.Println("inside writeWorker")
 	file, _ := os.Create("result.tsv")
     defer file.Close()
 	writer := csv.NewWriter(file)
     defer writer.Flush()
     writer.Comma = '\t'
-    writer.Write([]string{"STATUS","START_TIME", "DURATION" }) 
+    writer.Write([]string{"STATUS","START_TIME", "DURATION", "UNIX_TS"}) 
     for {
 		data, _ := <-o.output_queue
 		writer.Write(data)
@@ -235,12 +235,13 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	resp, err := client.Send(body)
 	stop := time.Now()
 	delta := stop.Sub(start)
-	duration := strconv.FormatInt(int64(delta), 10)
-	start_time := strconv.FormatInt(start.UnixNano(), 10)
+	unix_time := strconv.FormatInt(start.UnixNano(),10)
+	duration := strconv.FormatInt(int64(delta/1000), 10)
+	start_time := start.Format("2006-01-02 15:04:05.00000")
 	// fmt.Printf("%v %v %v \n",string(resp[9:13]),duration,start_time)
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
-	o.output_queue <- []string{ string(resp[9:13]), start_time, duration }
+	o.output_queue <- []string{ string(resp[9:13]), start_time , duration,  unix_time }
 	if err != nil {
 		Debug("Request error:", err)
 	}
