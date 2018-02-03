@@ -1,14 +1,16 @@
 package main
 
 import (
-	"io"
-	"sync/atomic"
-	"time"
-	_"fmt"
-	"github.com/buger/goreplay/proto"
+	"database/sql"
 	"encoding/csv"
+	"fmt"
+	"github.com/buger/goreplay/proto"
+	_ "github.com/go-sql-driver/mysql"
+	"io"
 	"os"
 	"strconv"
+	"sync/atomic"
+	"time"
 )
 
 const initialDynamicWorkers = 10
@@ -47,12 +49,11 @@ type HTTPOutput struct {
 	// aligned at 64bit. See https://github.com/golang/go/issues/599
 	activeWorkers int64
 
-	address string
-	limit   int
-	queue   chan []byte
+	address      string
+	limit        int
+	queue        chan []byte
 	output_queue chan []string
-	status chan bool
-
+	status       chan bool
 
 	responses chan response
 
@@ -80,7 +81,7 @@ func NewHTTPOutput(address string, config *HTTPOutputConfig) io.Writer {
 	o.queue = make(chan []byte, 1000)
 	o.responses = make(chan response, 1000)
 	o.needWorker = make(chan int, 1)
-	o.output_queue = make(chan []string,2)
+	o.output_queue = make(chan []string, 2)
 	o.status = make(chan bool)
 
 	// Initial workers count
@@ -118,23 +119,23 @@ func (o *HTTPOutput) workerMaster() {
 func (o *HTTPOutput) writeWorker() {
 	// fmt.Println("inside writeWorker")
 	file, _ := os.Create("result.tsv")
-    defer file.Close()
+	defer file.Close()
 	writer := csv.NewWriter(file)
-    defer writer.Flush()
-    writer.Comma = '\t'
-    writer.Write([]string{"STATUS","START_TIME", "DURATION", "UNIX_TS"}) 
-    for {
+	defer writer.Flush()
+	writer.Comma = '\t'
+	writer.Write([]string{"STATUS", "START_TIME", "DURATION", "UNIX_TS"})
+	for {
 		data, _ := <-o.output_queue
 		writer.Write(data)
-		// writer.Write([]string{"hihi"}) 
+		// writer.Write([]string{"hihi"})
 		writer.Flush()
-		
 
 	}
-    }
-
+}
 
 func (o *HTTPOutput) startWorker() {
+	InitDb("jlukose:testdb@/tr")
+	fmt.Println("inside start worker function")
 	client := NewHTTPClient(o.address, &HTTPClientConfig{
 		FollowRedirects:    o.config.redirectLimit,
 		Debug:              o.config.Debug,
@@ -148,7 +149,7 @@ func (o *HTTPOutput) startWorker() {
 	atomic.AddInt64(&o.activeWorkers, 1)
 
 	for {
-	
+
 		select {
 		case data := <-o.queue:
 			o.sendRequest(client, data)
@@ -213,7 +214,23 @@ func (o *HTTPOutput) Read(data []byte) (int, error) {
 	return len(resp.payload) + len(header), nil
 }
 
+var db *sql.DB
 
+func InitDb(dataSourceName string) {
+
+	var err error
+	db, err = sql.Open("mysql", dataSourceName)
+	if err != nil {
+		panic(err.Error()) // Just for example purpose. You should use proper error handling instead of panic
+	}
+	//dsn := "jlukose:testdb@/tr"
+	//defer db.Close()
+	err = db.Ping()
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+
+}
 
 func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	meta := payloadMeta(request)
@@ -235,13 +252,33 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	resp, err := client.Send(body)
 	stop := time.Now()
 	delta := stop.Sub(start)
-	unix_time := strconv.FormatInt(start.UnixNano(),10)
+	unix_time := strconv.FormatInt(start.UnixNano(), 10)
 	duration := strconv.FormatInt(int64(delta/1000), 10)
 	start_time := start.Format("2006-01-02 15:04:05.00000")
 	// fmt.Printf("%v %v %v \n",string(resp[9:13]),duration,start_time)
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
-	o.output_queue <- []string{ string(resp[9:13]), start_time , duration,  unix_time }
+
+	var id int
+	stmtOut := db.QueryRow("SELECT id FROM project_run ORDER BY ID DESC LIMIT 1")
+	err = stmtOut.Scan(&id) // WHERE number = 1
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+	stmtIns, err := db.Prepare("INSERT INTO metric_store (reqStartTime, duration, statusCode, projectRunId ) VALUES( ?,?,?,? )") // ? = placeholder
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+	defer stmtIns.Close()
+
+	_, err = stmtIns.Exec(start_time, 34, 200, id) // Insert tuples (i, i^2)
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+
+	fmt.Println(id)
+
+	o.output_queue <- []string{string(resp[9:13]), start_time, duration, unix_time}
 	if err != nil {
 		Debug("Request error:", err)
 	}
