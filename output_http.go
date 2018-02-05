@@ -265,7 +265,7 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
-	stmtIns, err := db.Prepare("INSERT INTO metric_store (reqStartTime, duration, statusCode, projectRunId ) VALUES( ?,?,?,? )") // ? = placeholder
+	stmtIns, err := db.Prepare("INSERT INTO m_store (reqStartTime, duration, statusCode, projectRunId ) VALUES( ?,?,?,? )") // ? = placeholder
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
