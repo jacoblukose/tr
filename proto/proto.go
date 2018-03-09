@@ -80,10 +80,11 @@ func headerIndex(payload []byte, name []byte) int {
 
 			// We are at the end
 			if i == len(payload) {
+				//allow-header patch
 				// fmt.Println("no request header found")
 				return -2
 			}
-			
+
 			// fmt.Printf("payload[i] :%s,name[0]: %s,islower: %v,tolower(name[0]): %v,toupper(name[0]): %v",string(payload[i]),string(name[0]),isLower,toLower(name[0]),toUpper(name[0]))
 			if payload[i] == name[0] ||
 				(!isLower && payload[i] == toLower(name[0])) ||
@@ -100,7 +101,7 @@ func headerIndex(payload []byte, name []byte) int {
 						return i - len(name)
 
 					}
-					// fmt.Println(string(payload[i]), string(name[j]))	
+					// fmt.Println(string(payload[i]), string(name[j]))
 					if payload[i] != name[j] {
 
 						break
@@ -139,10 +140,9 @@ func header(payload []byte, name []byte) (value []byte, headerStart, headerEnd, 
 	if headerStart == -1 {
 		return
 	} else if headerStart == -2 {
-
-		return []byte("invalid"),0,0,0,0
+		//allow-header patch
+		return []byte("invalid"), 0, 0, 0, 0
 	}
-
 
 	// fmt.Printf("\n headerStart %d \n", headerStart)
 	valueStart = headerStart + len(name) + 1 // Skip ":" after header name
@@ -172,7 +172,7 @@ func header(payload []byte, name []byte) (value []byte, headerStart, headerEnd, 
 	}
 	value = payload[valueStart:valueEnd]
 
-	// fmt.Println( "\n value: ", string(value), "\n") 
+	// fmt.Println( "\n value: ", string(value), "\n")
 
 	return
 }
