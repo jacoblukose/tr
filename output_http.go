@@ -135,7 +135,7 @@ func (o *HTTPOutput) writeWorker() {
 
 func (o *HTTPOutput) startWorker() {
 	InitDb("jlukose:testdb@/tr")
-	fmt.Println("inside start worker function")
+	//fmt.Println("inside start worker function")
 	client := NewHTTPClient(o.address, &HTTPClientConfig{
 		FollowRedirects:    o.config.redirectLimit,
 		Debug:              o.config.Debug,
@@ -259,9 +259,9 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
 
-	var id int
+	var projectRunId int
 	stmtOut := db.QueryRow("SELECT id FROM project_run ORDER BY ID DESC LIMIT 1")
-	err = stmtOut.Scan(&id) // WHERE number = 1
+	err = stmtOut.Scan(&projectRunId) // WHERE number = 1
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
@@ -271,12 +271,12 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	}
 	defer stmtIns.Close()
 
-	_, err = stmtIns.Exec(start_time, 34, 200, id) // Insert tuples (i, i^2)
+	_, err = stmtIns.Exec(start_time, duration, string(resp[9:13]), projectRunId) // Insert tuples (i, i^2)
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
 
-	fmt.Println(id)
+	fmt.Println(projectRunId)
 
 	o.output_queue <- []string{string(resp[9:13]), start_time, duration, unix_time}
 	if err != nil {

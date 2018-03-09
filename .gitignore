@@ -20,7 +20,7 @@ gor
 *.pcap
 
 .DS_Store
-
+tr-goreplay
 corpus
 crashers
 suppressions
