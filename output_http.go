@@ -14,8 +14,11 @@ import (
 )
 
 const initialDynamicWorkers = 10
-var mode int = 1 
-var db *sql.DB
+
+var (
+	db_mode int = 1
+	db      *sql.DB
+)
 
 type response struct {
 	payload       []byte
@@ -104,6 +107,10 @@ func NewHTTPOutput(address string, config *HTTPOutputConfig) io.Writer {
 }
 
 func (o *HTTPOutput) workerMaster() {
+	if db_mode == 1 {
+		fmt.Println("Initialising DB")
+		InitDb("jlukose:testdb@/tr")
+	}
 	go o.writeWorker()
 	for {
 		newWorkers := <-o.needWorker
@@ -137,9 +144,6 @@ func (o *HTTPOutput) writeWorker() {
 
 func (o *HTTPOutput) startWorker() {
 
-	if mode == 1 {
-		InitDb("jlukose:testdb@/tr")
-	}
 	//fmt.Println("inside start worker function")
 	client := NewHTTPClient(o.address, &HTTPClientConfig{
 		FollowRedirects:    o.config.redirectLimit,
@@ -224,21 +228,21 @@ func InitDb(dataSourceName string) {
 	var err error
 	db, err = sql.Open("mysql", dataSourceName)
 	if err != nil {
-		panic(err.Error()) 
+		panic(err.Error())
 	}
 	//defer db.Close()
 	err = db.Ping()
 	if err != nil {
-		panic(err.Error()) 
+		panic(err.Error())
 	}
 
 }
 
 func WriteToDb(start_time string, duration string, status_code string) {
-
+	fmt.Println("Writing to Db")
 	var projectRunId int
 	stmtOut := db.QueryRow("SELECT id FROM project_run ORDER BY ID DESC LIMIT 1")
-	err = stmtOut.Scan(&projectRunId) // WHERE number = 1
+	err := stmtOut.Scan(&projectRunId) // WHERE number = 1
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
@@ -251,7 +255,7 @@ func WriteToDb(start_time string, duration string, status_code string) {
 	if err != nil {
 		panic(err.Error()) // proper error handling instead of panic in your app
 	}
-	fmt.PrintF("projectRunId : %d \n", projectRunId)
+	fmt.Printf("projectRunId : %d \n", projectRunId)
 }
 
 func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
@@ -280,9 +284,9 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	// fmt.Printf("%v %v %v \n",string(resp[9:13]),duration,start_time)
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
-
-	WriteToDb(start_time, duration, string(resp[9:13]))
-
+	if db_mode == 1 {
+		WriteToDb(start_time, duration, string(resp[9:13]))
+	}
 	o.output_queue <- []string{string(resp[9:13]), start_time, duration, unix_time}
 	if err != nil {
 		Debug("Request error:", err)
