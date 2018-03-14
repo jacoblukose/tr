@@ -14,6 +14,8 @@ import (
 )
 
 const initialDynamicWorkers = 10
+var mode int = 1 
+var db *sql.DB
 
 type response struct {
 	payload       []byte
@@ -134,7 +136,10 @@ func (o *HTTPOutput) writeWorker() {
 }
 
 func (o *HTTPOutput) startWorker() {
-	InitDb("jlukose:testdb@/tr")
+
+	if mode == 1 {
+		InitDb("jlukose:testdb@/tr")
+	}
 	//fmt.Println("inside start worker function")
 	client := NewHTTPClient(o.address, &HTTPClientConfig{
 		FollowRedirects:    o.config.redirectLimit,
@@ -214,22 +219,39 @@ func (o *HTTPOutput) Read(data []byte) (int, error) {
 	return len(resp.payload) + len(header), nil
 }
 
-var db *sql.DB
-
 func InitDb(dataSourceName string) {
 
 	var err error
 	db, err = sql.Open("mysql", dataSourceName)
 	if err != nil {
-		panic(err.Error()) // Just for example purpose. You should use proper error handling instead of panic
+		panic(err.Error()) 
 	}
-	//dsn := "jlukose:testdb@/tr"
 	//defer db.Close()
 	err = db.Ping()
 	if err != nil {
-		panic(err.Error()) // proper error handling instead of panic in your app
+		panic(err.Error()) 
 	}
 
+}
+
+func WriteToDb(start_time string, duration string, status_code string) {
+
+	var projectRunId int
+	stmtOut := db.QueryRow("SELECT id FROM project_run ORDER BY ID DESC LIMIT 1")
+	err = stmtOut.Scan(&projectRunId) // WHERE number = 1
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+	stmtIns, err := db.Prepare("INSERT INTO metric_store (reqStartTime, duration, statusCode, projectRunId ) VALUES( ?,?,?,? )") // ? = placeholder
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+	defer stmtIns.Close()
+	_, err = stmtIns.Exec(start_time, duration, status_code, projectRunId) // Insert tuples (i, i^2)
+	if err != nil {
+		panic(err.Error()) // proper error handling instead of panic in your app
+	}
+	fmt.PrintF("projectRunId : %d \n", projectRunId)
 }
 
 func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
@@ -259,24 +281,7 @@ func (o *HTTPOutput) sendRequest(client *HTTPClient, request []byte) {
 	// fmt.Printf("Status_code : %v Duration : %v  Started at  : %v \n" , string(resp[9:13]), delta.Seconds() , start )
 	// writer.Write([]string{strconv.FormatInt(int64(c), 16), string(resp[9:13]), duration, start_time })
 
-	var projectRunId int
-	stmtOut := db.QueryRow("SELECT id FROM project_run ORDER BY ID DESC LIMIT 1")
-	err = stmtOut.Scan(&projectRunId) // WHERE number = 1
-	if err != nil {
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-	stmtIns, err := db.Prepare("INSERT INTO metric_store (reqStartTime, duration, statusCode, projectRunId ) VALUES( ?,?,?,? )") // ? = placeholder
-	if err != nil {
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-	defer stmtIns.Close()
-
-	_, err = stmtIns.Exec(start_time, duration, string(resp[9:13]), projectRunId) // Insert tuples (i, i^2)
-	if err != nil {
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-
-	fmt.Println(projectRunId)
+	WriteToDb(start_time, duration, string(resp[9:13]))
 
 	o.output_queue <- []string{string(resp[9:13]), start_time, duration, unix_time}
 	if err != nil {
